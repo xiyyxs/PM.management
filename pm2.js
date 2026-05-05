@@ -106,6 +106,7 @@ async function submitSV() {
   closeCSV();
   const lnk = location.origin + location.pathname + '?survey=' + pid;
   $('sv-link').textContent = lnk; $('link-modal').classList.add('is-open');
+  logAudit('survey', 'Created survey: ' + t);
   toast('Survey created!', 'success'); loadSurveys();
 }
 
@@ -163,12 +164,14 @@ async function openDetail(id) {
 async function tglSV(id, active) {
   await SB.from('surveys').update({ is_active: active }).eq('id', id);
   toast(active ? 'Survey opened' : 'Survey closed', 'success');
+  logAudit('survey', (active ? 'Opened' : 'Closed') + ' survey id:' + id);
   openDetail(id);
 }
 
 async function delSV(id) {
   await SB.from('survey_responses').delete().eq('survey_id', id);
   await SB.from('surveys').delete().eq('id', id);
+  logAudit('survey', 'Deleted survey id:' + id);
   toast('Deleted', 'info'); goTo('surveys');
 }
 
@@ -188,6 +191,7 @@ async function promR(rid, sid) {
   const { error } = await SB.from('users').update({ role: 'developer' }).eq('id', u.id);
   if (error) { toast('Error: ' + error.message, 'error'); return }
   await SB.from('survey_responses').update({ status: 'promoted' }).eq('id', rid);
+  logAudit('role_change', 'Promoted ' + u.username + ' to developer via survey');
   toast(u.username + ' → Developer!', 'success', 4000); openDetail(sid);
 }
 
@@ -207,21 +211,32 @@ function renderUsers() {
   const roleColors = { member: '#9ca3af', developer: '#c084fc', admin: '#f87171' };
   fl.forEach(u => {
     const d = document.createElement('div'); d.className = 'rrow';
+    const isBanned = !!u.banned;
     const roleOpts = ['member', 'developer', 'admin']
       .map(r => '<option value="' + r + '"' + (u.role === r ? ' selected' : '') + ' style="background:#1a1a2e">' + r.charAt(0).toUpperCase() + r.slice(1) + '</option>').join('');
-    d.innerHTML = '<div style="width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,#7c3aed,#4f46e5);display:flex;align-items:center;justify-content:center;font-weight:900;flex-shrink:0">' + (u.username || 'U').charAt(0).toUpperCase() + '</div>'
-      + '<div style="flex:1;min-width:0"><div style="font-size:.78rem;font-weight:900;text-transform:uppercase">' + esc((u.username || '').toUpperCase()) + '</div>'
+    const banBtn = isBanned
+      ? '<button onclick="toggleBan(\'' + u.id + '\',false)" title="Unban" style="padding:5px 10px;border-radius:8px;background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.25);color:#4ade80;font-size:.6rem;cursor:pointer;font-family:inherit"><i class="fas fa-unlock"></i></button>'
+      : '<button onclick="toggleBan(\'' + u.id + '\',true)" title="Ban" style="padding:5px 10px;border-radius:8px;background:rgba(220,38,38,.1);border:1px solid rgba(220,38,38,.25);color:#fca5a5;font-size:.6rem;cursor:pointer;font-family:inherit"><i class="fas fa-ban"></i></button>';
+    const histBtn = '<button onclick="openUserHist(\'' + u.id + '\')" title="History" style="padding:5px 10px;border-radius:8px;background:rgba(168,85,247,.08);border:1px solid rgba(168,85,247,.2);color:#c084fc;font-size:.6rem;cursor:pointer;font-family:inherit"><i class="fas fa-history"></i></button>';
+    d.innerHTML = '<div style="width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,' + (isBanned ? '#7f1d1d,#991b1b' : '#7c3aed,#4f46e5') + ');display:flex;align-items:center;justify-content:center;font-weight:900;flex-shrink:0">' + (u.username || 'U').charAt(0).toUpperCase() + '</div>'
+      + '<div style="flex:1;min-width:0"><div style="font-size:.78rem;font-weight:900;text-transform:uppercase' + (isBanned ? ';opacity:.45;text-decoration:line-through' : '') + '">' + esc((u.username || '').toUpperCase()) + (isBanned ? ' <span style="font-size:.5rem;color:#f87171;font-weight:900;text-decoration:none">[BANNED]</span>' : '') + '</div>'
       + '<div style="font-size:.58rem;color:#64748b;margin-top:2px">' + esc(u.email || '') + '</div></div>'
-      + '<select onchange="chRole(\'' + u.id + '\',this.value)" style="background:rgba(255,255,255,.05);border:1px solid rgba(168,85,247,.2);color:' + (roleColors[u.role] || '#fff') + ';padding:7px 12px;border-radius:10px;font-size:.62rem;font-weight:900;text-transform:uppercase;cursor:pointer;font-family:inherit">' + roleOpts + '</select>';
+      + '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">'
+      + '<select onchange="chRole(\'' + u.id + '\',this.value)" style="background:rgba(255,255,255,.05);border:1px solid rgba(168,85,247,.2);color:' + (roleColors[u.role] || '#fff') + ';padding:7px 12px;border-radius:10px;font-size:.62rem;font-weight:900;text-transform:uppercase;cursor:pointer;font-family:inherit">' + roleOpts + '</select>'
+      + banBtn + histBtn
+      + '</div>';
     el.appendChild(d);
   });
 }
 
 async function chRole(id, role) {
+  const u = USERS.find(x => x.id === id);
+  const oldRole = u?.role || '?';
   const { error } = await SB.from('users').update({ role }).eq('id', id);
   if (error) { toast('Error: ' + error.message, 'error'); return }
-  const u = USERS.find(x => x.id === id); if (u) u.role = role;
+  if (u) u.role = role;
   renderUsers(); toast('Role → ' + role, 'success', 2000);
+  logAudit('role_change', 'Changed ' + (u?.username || id) + ' role: ' + oldRole + ' → ' + role);
 }
 
 // ── Invite Codes ───────────────────────────────────────────────────────────
@@ -254,12 +269,15 @@ async function createIC() {
   const { error } = await SB.from('invite_codes').insert({ code, created_by: ADMIN?.id || null });
   if (error) { toast('Error: ' + error.message, 'error'); return }
   toast('Code: ' + code, 'success', 6000);
+  logAudit('invite', 'Generated invite code: ' + code);
   loadInviteCodes();
 }
 
 async function delIC(id) {
   if (!confirm('Delete this invite code?')) return;
+  const ic = INVITE_CODES.find(x => x.id === id);
   await SB.from('invite_codes').delete().eq('id', id);
+  logAudit('invite', 'Deleted invite code: ' + (ic?.code || id));
   loadInviteCodes();
 }
 
