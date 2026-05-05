@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<link rel="icon" href="logo.png">
+<title>PM.management</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;700;900&display=swap');
+:root{--accent:#a855f7;--bg:#030005;--nav-h:68px}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none}
+input,textarea,select,.toast,.code-badge{user-select:text;-webkit-user-select:text}
+button{user-select:none;cursor:pointer}
+html{overflow-x:hidden;scroll-behavior:smooth}
+body{background:var(--bg);color:#fff;font-family:'Unbounded',sans-serif;overflow-x:hidden;min-height:100vh}
+canvas{position:fixed;top:0;left:0;z-index:-1;opacity:.6;pointer-events:none}
+.glass{background:rgba(168,85,247,.05);backdrop-filter:blur(12px);border:1px solid rgba(168,85,247,.2);border-radius:20px}
+.glow-btn{background:var(--accent);box-shadow:0 0 20px rgba(168,85,247,.4);transition:all .3s}
+.glow-btn:hover{box-shadow:0 0 40px rgba(168,85,247,.7);transform:translateY(-2px)}
+.glow-btn:active{transform:translateY(0)}
+.gradient-text{background:linear-gradient(45deg,#fff,#a855f7);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+input,textarea,select{background:rgba(255,255,255,.05)!important;border:1px solid rgba(168,85,247,.2)!important;outline:none!important;color:#fff;font-family:'Unbounded',sans-serif;transition:border-color .3s}
+input:focus,textarea:focus,select:focus{border-color:var(--accent)!important}
+textarea{resize:none!important}
+select option{background:#1a1a2e;color:#fff}
+*::-webkit-scrollbar{width:4px}*::-webkit-scrollbar-track{background:rgba(168,85,247,.05);border-radius:10px}*::-webkit-scrollbar-thumb{background:var(--accent);border-radius:10px}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:1000;backdrop-filter:blur(10px);overflow-y:auto;padding:16px;display:flex;align-items:flex-start;justify-content:center;opacity:0;pointer-events:none;transition:opacity .35s}
+.modal-overlay.is-open{opacity:1;pointer-events:auto}
+.modal-overlay .mc{transform:translateY(30px) scale(.96);transition:transform .35s cubic-bezier(.4,0,.2,1)}
+.modal-overlay.is-open .mc{transform:translateY(0) scale(1)}
+.mc{width:100%;max-width:640px;margin:auto;position:relative}
+.nav-bar{padding:12px 16px;height:var(--nav-h)}
+.page-main{padding-top:calc(var(--nav-h)+24px);padding-bottom:60px;padding-left:16px;padding-right:16px;max-width:100%}
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes fadeIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+.sec-anim{animation:fadeIn .4s ease forwards}
+.pin-row{display:flex;gap:10px;justify-content:center}
+.pin-cell{width:56px;height:64px!important;text-align:center!important;font-size:1.6rem!important;font-weight:900!important;border-radius:14px!important;caret-color:var(--accent);padding:0!important}
+.pin-cell:focus{border-color:var(--accent)!important;box-shadow:0 0 18px rgba(168,85,247,.22)}
+.stat-card{padding:16px;background:rgba(168,85,247,.05);border:1px solid rgba(168,85,247,.15);border-radius:14px;text-align:center;transition:transform .3s,border-color .3s}
+.stat-card:hover{transform:translateY(-3px);border-color:rgba(168,85,247,.35)}
+.stat-card-val{font-size:1.5rem;font-weight:900;color:var(--accent)}
+.stat-card-lbl{font-size:.55rem;font-weight:700;text-transform:uppercase;opacity:.45;margin-top:4px}
+.code-badge{font-family:monospace;background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.25);color:#d8b4fe;padding:4px 10px;border-radius:8px;font-size:.85rem;letter-spacing:.1em}
+#toast-container{position:fixed;top:80px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:10px;pointer-events:none}
+.toast{display:flex;align-items:center;gap:12px;padding:14px 18px;border-radius:16px;font-family:'Unbounded',sans-serif;font-size:.72rem;font-weight:700;max-width:340px;backdrop-filter:blur(16px);pointer-events:auto;transform:translateX(360px);opacity:0;transition:transform .4s cubic-bezier(.34,1.56,.64,1),opacity .4s;cursor:pointer}
+.toast.show{transform:translateX(0);opacity:1}.toast.hide{transform:translateX(360px);opacity:0}
+.toast-success{background:rgba(5,150,105,.15);border:1px solid rgba(5,150,105,.4);color:#6ee7b7}
+.toast-error{background:rgba(220,38,38,.15);border:1px solid rgba(220,38,38,.4);color:#fca5a5}
+.toast-info{background:rgba(168,85,247,.15);border:1px solid rgba(168,85,247,.4);color:#d8b4fe}
+.toast-warning{background:rgba(217,119,6,.15);border:1px solid rgba(217,119,6,.4);color:#fcd34d}
+.stab{padding:12px 18px;border-radius:14px;font-size:.7rem;font-weight:900;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;transition:all .3s;font-family:inherit;display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:1px solid transparent}
+.stab:hover{background:rgba(168,85,247,.08);border-color:rgba(168,85,247,.15)}
+.stab.active{background:rgba(168,85,247,.15);border-color:rgba(168,85,247,.35);color:#d8b4fe}
+.stab i{width:18px;text-align:center;font-size:.8rem}
+.sv-card{background:rgba(255,255,255,.025);border:1px solid rgba(168,85,247,.1);border-radius:16px;padding:18px;transition:border-color .3s,transform .3s,box-shadow .3s;cursor:pointer}
+.sv-card:hover{border-color:rgba(168,85,247,.35);transform:translateY(-3px);box-shadow:0 8px 30px rgba(168,85,247,.15)}
+.fb{background:rgba(255,255,255,.03);border:1px solid rgba(168,85,247,.12);border-radius:14px;padding:14px;transition:border-color .3s}
+.fb:hover{border-color:rgba(168,85,247,.25)}
+.rrow{display:flex;align-items:center;gap:12px;padding:12px 14px;background:rgba(255,255,255,.03);border:1px solid rgba(168,85,247,.1);border-radius:12px;transition:border-color .3s,background .3s}
+.rrow:hover{border-color:rgba(168,85,247,.3);background:rgba(168,85,247,.04)}
+.asf{width:100%;padding:10px 14px;border-radius:12px;font-size:.72rem;background:rgba(255,255,255,.04)!important;border:1px solid rgba(168,85,247,.18)!important;color:#fff;font-family:'Unbounded',sans-serif;margin-bottom:12px}
+.auth-slide{transition:opacity .35s,transform .35s;position:absolute;top:0;left:0;right:0}
+.auth-slide.vis{opacity:1;transform:translateX(0);position:relative;pointer-events:auto}
+.auth-slide.out-r{opacity:0;transform:translateX(30px);pointer-events:none}
+.auth-slide.out-l{opacity:0;transform:translateX(-30px);pointer-events:none}
+.auth-input{width:100%;padding:14px 18px;border-radius:16px;font-size:.8rem;background:rgba(255,255,255,.05)!important;border:1px solid rgba(168,85,247,.2)!important;color:#fff;font-family:'Unbounded',sans-serif;outline:none;transition:border-color .3s}
+.auth-input:focus{border-color:var(--accent)!important}
+.atb{padding:10px 24px;border-radius:30px;font-size:.65rem;font-weight:900;text-transform:uppercase;letter-spacing:.1em;transition:background .35s,box-shadow .35s,transform .35s,color .35s;cursor:pointer}
+.atb.on{background:var(--accent);box-shadow:0 0 24px rgba(168,85,247,.5);transform:scale(1.04)}
+.atb:not(.on){background:rgba(255,255,255,.05);color:rgba(255,255,255,.4)}
+.ibtn{padding:5px 10px;border-radius:8px;font-size:.6rem;font-weight:900;cursor:pointer;font-family:inherit;text-transform:uppercase;transition:all .25s;display:inline-flex;align-items:center;gap:4px}
+.ibtn:hover{transform:translateY(-1px)}
+@media(min-width:640px){.nav-bar{padding:14px 24px}.page-main{padding-left:24px;padding-right:24px;max-width:1200px;margin:0 auto}}
+@media(min-width:1024px){.nav-bar{padding:0 40px}.page-main{padding-left:40px;padding-right:40px;max-width:1300px}.lgrid{display:grid!important;grid-template-columns:220px 1fr;gap:24px}}
+.auth-center{min-height:100vh;display:flex;align-items:center;justify-content:center;padding-top:0}
+.auth-center.hidden,.hidden{display:none!important}
+</style>
+</head>
+<body>
+<canvas id="bg"></canvas>
+<div id="toast-container"></div>
+<nav class="nav-bar fixed top-0 w-full z-[100] flex justify-between items-center bg-[#030005]/60 backdrop-filter backdrop-blur-md border-b border-white/5">
+<div class="flex items-center gap-3 cursor-pointer" onclick="goTo('dashboard')">
+<div style="width:42px;height:42px"><img src="logo.png" alt="" style="width:100%;height:100%;object-fit:contain"></div>
+<span class="font-black tracking-tighter uppercase text-xl">PM<span class="text-purple-500 lowercase">.management</span></span>
+</div>
+<div class="flex items-center gap-4" id="nav-r">
+<span id="nav-name" class="text-xs font-bold opacity-50 uppercase tracking-widest hidden"></span>
+<button id="nav-out" onclick="signOut()" class="text-xs font-bold opacity-40 hover:opacity-100 uppercase tracking-widest transition-opacity hidden"><i class="fas fa-sign-out-alt mr-1"></i>Exit</button>
+</div>
+</nav>
+
+<div id="auth-screen" class="page-main auth-center">
+<div class="glass" style="padding:40px 32px;max-width:460px;width:100%">
+<div class="text-center mb-8">
+<span class="text-2xl font-black tracking-tighter uppercase">PM<span class="text-purple-500 lowercase">.management</span></span>
+<p class="text-slate-500 text-xs mt-3 font-bold uppercase tracking-widest">Admin Access</p>
+</div>
+<div class="flex gap-3 justify-center mb-8">
+<button class="atb on" id="at-login" onclick="switchAuth('login')">Login</button>
+<button class="atb" id="at-reg" onclick="switchAuth('register')">Register</button>
+</div>
+<div style="position:relative;min-height:280px">
+<div id="f-login" class="auth-slide vis space-y-4">
+<input type="text" id="l-user" class="auth-input" placeholder="Username">
+<input type="password" id="l-pass" class="auth-input" placeholder="Password">
+<div>
+<p class="text-xs font-bold opacity-40 uppercase mb-3 text-center tracking-widest">Enter PIN</p>
+<div class="pin-row">
+<input type="password" maxlength="1" class="pin-cell" id="lp-0" oninput="lpi(event,0)" onkeydown="lpk(event,0)">
+<input type="password" maxlength="1" class="pin-cell" id="lp-1" oninput="lpi(event,1)" onkeydown="lpk(event,1)">
+<input type="password" maxlength="1" class="pin-cell" id="lp-2" oninput="lpi(event,2)" onkeydown="lpk(event,2)">
+<input type="password" maxlength="1" class="pin-cell" id="lp-3" oninput="lpi(event,3)" onkeydown="lpk(event,3)">
+</div>
+</div>
+<p id="l-err" class="text-red-400 text-xs font-bold text-center hidden"></p>
+<button onclick="doLogin()" id="l-btn" class="w-full glow-btn font-black uppercase tracking-widest py-3.5 rounded-2xl text-sm">Unlock</button>
+<button onclick="showReset()" class="w-full text-xs font-bold opacity-25 hover:opacity-60 uppercase tracking-widest transition-opacity pt-2">Forgot PIN?</button>
+</div>
+<div id="f-reg" class="auth-slide out-r space-y-4">
+<input type="text" id="r-user" class="auth-input" placeholder="Username" maxlength="20">
+<input type="password" id="r-pass" class="auth-input" placeholder="Password (min 6 chars)">
+<input type="password" id="r-pass2" class="auth-input" placeholder="Confirm Password">
+<input type="text" id="r-invite" class="auth-input" placeholder="Invite Code" style="letter-spacing:.15em;text-transform:uppercase">
+<p id="r-err" class="text-red-400 text-xs font-bold text-center hidden"></p>
+<button onclick="doRegister()" id="r-btn" class="w-full glow-btn font-black uppercase tracking-widest py-3.5 rounded-2xl text-sm">Create Account</button>
+</div>
+</div>
+</div>
+</div>
+
+<div id="welcome-modal" class="modal-overlay">
+<div class="mc" style="max-width:480px">
+<div class="glass" style="padding:40px 32px;border-radius:20px">
+<div class="text-center mb-5"><i class="fas fa-shield-alt text-4xl text-purple-400" style="filter:drop-shadow(0 0 12px rgba(168,85,247,.5))"></i></div>
+<h3 class="text-xl font-black uppercase text-center mb-2">Account Created!</h3>
+<p class="text-slate-400 text-xs text-center font-bold mb-8">Save these credentials. They will NOT be shown again.</p>
+<div class="space-y-6">
+<div class="text-center"><p class="text-xs font-bold opacity-40 uppercase mb-3">Your PIN</p><span id="show-pin" class="code-badge text-2xl" style="letter-spacing:.3em"></span></div>
+<div class="text-center"><p class="text-xs font-bold opacity-40 uppercase mb-3">Recovery Code</p><span id="show-rc" class="code-badge text-lg" style="letter-spacing:.15em"></span></div>
+</div>
+<p class="text-yellow-400/70 text-xs text-center font-bold mt-6"><i class="fas fa-exclamation-triangle mr-1"></i>Write these down NOW!</p>
+<button onclick="closeWelcome()" class="w-full glow-btn font-black uppercase tracking-widest py-3.5 rounded-2xl text-sm mt-8">I've Saved Them</button>
+</div>
+</div>
+</div>
+
+<div id="reset-modal" class="modal-overlay">
+<div class="mc" style="max-width:440px">
+<div class="glass" style="padding:36px 28px;border-radius:20px;position:relative">
+<button onclick="closeReset()" class="absolute opacity-60 hover:opacity-100 transition-all hover:rotate-90 z-10" style="top:16px;right:16px;padding:8px"><i class="fas fa-times text-xl"></i></button>
+<h3 class="text-lg font-black uppercase text-center mb-6">Reset PIN</h3>
+<div class="space-y-4">
+<input type="text" id="rs-user" class="auth-input" placeholder="Username">
+<input type="password" id="rs-pass" class="auth-input" placeholder="Password">
+<input type="text" id="rs-code" class="auth-input" placeholder="8-digit Recovery Code" maxlength="8" style="text-transform:uppercase;letter-spacing:.1em">
+<p id="rs-err" class="text-red-400 text-xs font-bold text-center hidden"></p>
+<button onclick="doReset()" id="rs-btn" class="w-full glow-btn font-black uppercase tracking-widest py-3.5 rounded-2xl text-sm">Reset & Show New PIN</button>
+</div>
+<div id="rs-result" class="hidden text-center mt-6">
+<p class="text-xs font-bold opacity-40 uppercase mb-3">Your New PIN</p>
+<span id="rs-new-pin" class="code-badge text-2xl" style="letter-spacing:.3em"></span>
+<p class="text-yellow-400/70 text-xs font-bold mt-4"><i class="fas fa-exclamation-triangle mr-1"></i>Save it now!</p>
+</div>
+</div>
+</div>
+</div>
+
+<div id="app" style="display:none;padding-top:calc(var(--nav-h) + 28px);padding-bottom:60px">
+<div style="max-width:1300px;margin:0 auto;padding:0 24px;display:flex;gap:24px;align-items:flex-start">
+
+  <div class="glass" style="width:220px;flex-shrink:0;padding:16px;border-radius:18px;position:sticky;top:calc(var(--nav-h)+16px)">
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <button class="stab active" id="t-dashboard" onclick="goTo('dashboard')"><i class="fas fa-th-large"></i>Dashboard</button>
+      <button class="stab" id="t-surveys" onclick="goTo('surveys')"><i class="fas fa-poll"></i>Surveys</button>
+      <button class="stab" id="t-users" onclick="goTo('users')"><i class="fas fa-users"></i>Users</button>
+    </div>
+  </div>
+
+  <div style="flex:1;min-width:0">
+    <div id="s-dashboard">
+      <h2 style="font-size:1.8rem;font-weight:900;text-transform:uppercase;margin-bottom:24px;background:linear-gradient(45deg,#fff,#a855f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent">Dashboard</h2>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px">
+        <div class="stat-card"><div class="stat-card-val" id="d-sv">0</div><div class="stat-card-lbl">Surveys</div></div>
+        <div class="stat-card"><div class="stat-card-val" id="d-rs">0</div><div class="stat-card-lbl">Responses</div></div>
+        <div class="stat-card"><div class="stat-card-val" id="d-us">0</div><div class="stat-card-lbl">PM.tools Users</div></div>
+        <div class="stat-card"><div class="stat-card-val" id="d-nw">0</div><div class="stat-card-lbl">New Today</div></div>
+      </div>
+      <div class="glass" style="padding:24px;border-radius:16px">
+        <h3 style="font-size:.7rem;font-weight:900;text-transform:uppercase;opacity:.4;margin-bottom:16px;letter-spacing:.1em">Recent Responses</h3>
+        <div id="d-recent" style="display:flex;flex-direction:column;gap:8px"><p style="color:#64748b;font-style:italic;font-size:.85rem">Loading...</p></div>
+      </div>
+    </div>
+
+    <div id="s-surveys" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px">
+        <h2 style="font-size:1.8rem;font-weight:900;text-transform:uppercase;background:linear-gradient(45deg,#fff,#a855f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent">Surveys</h2>
+        <button onclick="openCSV()" class="glow-btn" style="padding:10px 24px;border-radius:30px;font-weight:900;text-transform:uppercase;font-size:.75rem;letter-spacing:.08em"><i class="fas fa-plus" style="margin-right:6px"></i>Create</button>
+      </div>
+      <div id="sv-list" style="display:flex;flex-direction:column;gap:12px"><p style="color:#64748b;font-style:italic;font-size:.85rem">Loading...</p></div>
+    </div>
+
+    <div id="s-detail" style="display:none">
+      <button onclick="goTo('surveys')" style="font-size:.65rem;font-weight:900;text-transform:uppercase;letter-spacing:.08em;opacity:.4;transition:opacity .2s;margin-bottom:20px;display:inline-flex;align-items:center;gap:6px;background:none;border:none;color:#fff" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.4"><i class="fas fa-arrow-left"></i>Back to Surveys</button>
+      <div id="det-content"></div>
+    </div>
+
+    <div id="s-users" style="display:none">
+      <h2 style="font-size:1.8rem;font-weight:900;text-transform:uppercase;margin-bottom:24px;background:linear-gradient(45deg,#fff,#a855f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent">PM.tools Users</h2>
+
+      <div class="glass" style="padding:20px 24px;border-radius:16px;margin-bottom:20px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+          <h3 style="font-size:.65rem;font-weight:900;text-transform:uppercase;opacity:.4;letter-spacing:.1em"><i class="fas fa-ticket-alt" style="margin-right:6px"></i>Invite Codes</h3>
+          <button onclick="createIC()" class="glow-btn" style="padding:7px 18px;border-radius:20px;font-size:.65rem;font-weight:900;text-transform:uppercase;letter-spacing:.05em"><i class="fas fa-plus" style="margin-right:5px"></i>Generate</button>
+        </div>
+        <div id="ic-list" style="display:flex;flex-direction:column;gap:6px"><p style="color:#64748b;font-style:italic;font-size:.8rem">Loading...</p></div>
+      </div>
+
+      <input type="text" class="asf" id="u-search" placeholder="Search users..." oninput="renderUsers()">
+      <div id="u-list" style="display:flex;flex-direction:column;gap:8px"><p style="color:#64748b;font-style:italic;font-size:.85rem">Loading...</p></div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<div id="csv-modal" class="modal-overlay">
+<div class="mc" style="max-width:700px">
+<div class="glass" style="padding:36px 28px;border-radius:20px;position:relative">
+<button onclick="closeCSV()" class="absolute opacity-60 hover:opacity-100 transition-all hover:rotate-90 z-10" style="top:16px;right:16px;padding:8px"><i class="fas fa-times text-xl"></i></button>
+<h2 class="text-xl font-black uppercase mb-6">Create Survey</h2>
+<div class="space-y-5">
+<div><label class="text-xs font-bold opacity-50 uppercase mb-2 block">Title</label><input type="text" id="csv-t" class="auth-input" placeholder="Survey title" maxlength="60"></div>
+<div><label class="text-xs font-bold opacity-50 uppercase mb-2 block">Description</label><textarea id="csv-d" class="auth-input" style="height:80px;padding-top:14px" placeholder="Brief description..." maxlength="200"></textarea></div>
+<div>
+<div class="flex items-center justify-between mb-3"><label class="text-xs font-bold opacity-50 uppercase">Fields</label><button onclick="addField()" class="text-xs font-bold text-purple-400 hover:text-purple-300 uppercase transition-colors"><i class="fas fa-plus mr-1"></i>Add Field</button></div>
+<div id="flds" class="space-y-3"></div>
+</div>
+<button onclick="submitSV()" id="csv-btn" class="w-full glow-btn font-black uppercase tracking-widest py-3.5 rounded-2xl text-sm">Create & Get Link</button>
+</div>
+</div>
+</div>
+</div>
+
+<div id="link-modal" class="modal-overlay">
+<div class="mc" style="max-width:480px;position:relative">
+<button onclick="closeLink()" class="absolute opacity-60 hover:opacity-100 transition-all hover:rotate-90 z-10" style="top:16px;right:16px;padding:8px"><i class="fas fa-times text-xl"></i></button>
+<div class="glass" style="padding:36px 28px;border-radius:20px;text-align:center">
+<i class="fas fa-link text-3xl text-purple-400 mb-4" style="filter:drop-shadow(0 0 12px rgba(168,85,247,.5))"></i>
+<h3 class="text-lg font-black uppercase mb-2">Survey Link</h3>
+<p class="text-slate-400 text-xs font-bold mb-5">Share this link with participants</p>
+<div class="code-badge text-sm break-all" id="sv-link" style="display:block;padding:14px;cursor:pointer" onclick="cpLink()"></div>
+<button onclick="cpLink()" class="glow-btn px-6 py-2.5 rounded-full font-black uppercase text-xs mt-5"><i class="fas fa-copy mr-1"></i>Copy Link</button>
+</div>
+</div>
+</div>
+
+<div id="pub-screen" class="hidden" style="min-height:100vh;padding-top:100px;padding-bottom:60px">
+<div style="max-width:600px;margin:0 auto;padding:0 20px">
+<div id="pub-content"></div>
+</div>
+</div>
+
+<div id="pub-thanks" style="position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:var(--bg)">
+<div class="text-center" style="animation:fadeIn .5s ease forwards">
+<i class="fas fa-check-circle" style="font-size:3.5rem;color:#4ade80;filter:drop-shadow(0 0 20px rgba(74,222,128,.5));display:block;margin-bottom:20px"></i>
+<h2 style="font-size:1.8rem;font-weight:900;text-transform:uppercase;margin-bottom:8px">Thank You!</h2>
+<p style="font-size:.85rem;color:#64748b;font-weight:700">Your response has been submitted.</p>
+</div>
+</div>
+
+<script src="pm1.js"></script>
+<script src="pm2.js"></script>
+<script src="pm.anim.js"></script>
+</body>
+</html>
