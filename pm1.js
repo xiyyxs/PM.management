@@ -113,7 +113,7 @@ async function doLogin() {
     [0, 1, 2, 3].forEach(i => { $('lp-' + i).value = '' }); $('lp-0').focus();
     setTimeout(() => hide(err), 3000); return;
   }
-  ADMIN = data; enterApp();
+  ADMIN = data; logAudit('login', 'Logged in'); enterApp();
 }
 
 // ── Register ───────────────────────────────────────────────────────────────
@@ -157,6 +157,9 @@ async function doRegister() {
 
   // Mark invite code as used
   await SB.from('invite_codes').update({ used: true, used_by: data.id }).eq('id', ic.id);
+
+  // Audit log (ADMIN not set yet, use data directly)
+  await SB.from('audit_logs').insert({ admin_id: data.id, admin_username: data.username, action: 'register', details: 'Account registered' }).catch(() => {});
 
   $('show-pin').textContent = pin; $('show-rc').textContent = rc;
   $('welcome-modal').classList.add('is-open'); ADMIN = data;
@@ -218,7 +221,7 @@ function signOut() {
 }
 
 function goTo(sec) {
-  ['dashboard', 'surveys', 'detail', 'users'].forEach(s => {
+  ['dashboard', 'surveys', 'detail', 'users', 'sites', 'audit'].forEach(s => {
     const el = $('s-' + s), tb = $('t-' + s);
     if (s === sec) { if (el) el.style.display = 'block'; if (tb) tb.classList.add('active') }
     else           { if (el) el.style.display = 'none';  if (tb) tb.classList.remove('active') }
@@ -226,5 +229,7 @@ function goTo(sec) {
   if (sec === 'dashboard') loadDashboard();
   else if (sec === 'surveys') loadSurveys();
   else if (sec === 'users')   loadUsers();
+  else if (sec === 'sites')   loadSites();
+  else if (sec === 'audit')   loadAudit();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
