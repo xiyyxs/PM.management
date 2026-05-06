@@ -180,6 +180,7 @@ select option{background:#1a1a2e;color:#fff}
       <button class="stab" id="t-surveys" onclick="goTo('surveys')"><i class="fas fa-poll"></i>Surveys</button>
       <button class="stab" id="t-users" onclick="goTo('users')"><i class="fas fa-users"></i>Users</button>
       <button class="stab" id="t-sites" onclick="goTo('sites')"><i class="fas fa-globe"></i>Sites</button>
+      <button class="stab" id="t-dbtools" onclick="goTo('dbtools')"><i class="fas fa-database"></i>DB Tools</button>
       <button class="stab" id="t-audit" onclick="goTo('audit')"><i class="fas fa-clipboard-list"></i>Audit Logs</button>
     </div>
   </div>
@@ -196,6 +197,15 @@ select option{background:#1a1a2e;color:#fff}
       <div class="glass" style="padding:24px;border-radius:16px">
         <h3 style="font-size:.7rem;font-weight:900;text-transform:uppercase;opacity:.4;margin-bottom:16px;letter-spacing:.1em">Recent Responses</h3>
         <div id="d-recent" style="display:flex;flex-direction:column;gap:8px"><p style="color:#64748b;font-style:italic;font-size:.85rem">Loading...</p></div>
+      </div>
+      <div class="glass" style="padding:24px;border-radius:16px;margin-top:20px">
+        <h3 style="font-size:.7rem;font-weight:900;text-transform:uppercase;opacity:.4;margin-bottom:16px;letter-spacing:.1em">Application Queue</h3>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
+          <div class="stat-card"><div class="stat-card-val" id="d-q-new">0</div><div class="stat-card-lbl">New</div></div>
+          <div class="stat-card"><div class="stat-card-val" id="d-q-review">0</div><div class="stat-card-lbl">In Review</div></div>
+          <div class="stat-card"><div class="stat-card-val" id="d-q-info">0</div><div class="stat-card-lbl">Needs Info</div></div>
+          <div class="stat-card"><div class="stat-card-val" id="d-q-approved">0</div><div class="stat-card-lbl">Approved</div></div>
+        </div>
       </div>
     </div>
 
@@ -255,6 +265,27 @@ select option{background:#1a1a2e;color:#fff}
         <p style="font-size:.58rem;color:#64748b;margin-top:8px;font-weight:700">This URL is used as the survey link shown to PM.tools users for upgrade requests.</p>
       </div>
 
+      <div class="glass" style="padding:24px;border-radius:16px;margin-bottom:20px">
+        <h3 style="font-size:.65rem;font-weight:900;text-transform:uppercase;opacity:.4;letter-spacing:.1em;margin-bottom:16px"><i class="fas fa-pen-nib" style="margin-right:6px"></i>Change Log Manager</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+          <select id="change-site" class="auth-input" style="padding:12px 16px;font-size:.75rem">
+            <option value="PM.tools">PM.tools</option>
+            <option value="PM.management">PM.management</option>
+            <option value="Supabase">Supabase</option>
+          </select>
+          <select id="change-type" class="auth-input" style="padding:12px 16px;font-size:.75rem">
+            <option value="deploy">Deploy</option>
+            <option value="config">Config</option>
+            <option value="database">Database</option>
+            <option value="hotfix">Hotfix</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center">
+          <input type="text" id="change-details" class="auth-input" style="flex:1;padding:12px 16px;font-size:.75rem" placeholder="What changed?">
+          <button onclick="addManualChangeLog()" class="glow-btn" style="padding:12px 20px;border-radius:14px;font-size:.65rem;font-weight:900;text-transform:uppercase;white-space:nowrap"><i class="fas fa-plus" style="margin-right:5px"></i>Add</button>
+        </div>
+      </div>
+
       <div class="glass" style="padding:24px;border-radius:16px">
         <h3 style="font-size:.65rem;font-weight:900;text-transform:uppercase;opacity:.4;letter-spacing:.1em;margin-bottom:14px"><i class="fas fa-history" style="margin-right:6px"></i>Deploy / Change Log</h3>
         <div id="deploy-log" style="display:flex;flex-direction:column;gap:8px"><p style="color:#64748b;font-style:italic;font-size:.8rem">Loading...</p></div>
@@ -262,19 +293,51 @@ select option{background:#1a1a2e;color:#fff}
     </div>
 
     <!-- ── AUDIT LOGS ── -->
+    <div id="s-dbtools" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px">
+        <h2 style="font-size:1.8rem;font-weight:900;text-transform:uppercase;background:linear-gradient(45deg,#fff,#a855f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent">DB Tools</h2>
+        <button onclick="loadDbStatus()" style="padding:9px 16px;border-radius:12px;background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.25);color:#d8b4fe;font-size:.6rem;font-weight:900;text-transform:uppercase;cursor:pointer;font-family:inherit"><i class="fas fa-sync-alt" style="margin-right:5px"></i>Refresh</button>
+      </div>
+
+      <div class="glass" style="padding:24px;border-radius:16px;margin-bottom:20px">
+        <h3 style="font-size:.65rem;font-weight:900;text-transform:uppercase;opacity:.4;letter-spacing:.1em;margin-bottom:14px"><i class="fas fa-heartbeat" style="margin-right:6px"></i>Database Status</h3>
+        <div id="db-status-list" style="display:flex;flex-direction:column;gap:8px"><p style="color:#64748b;font-style:italic;font-size:.85rem">Loading...</p></div>
+      </div>
+
+      <div class="glass" style="padding:24px;border-radius:16px">
+        <h3 style="font-size:.65rem;font-weight:900;text-transform:uppercase;opacity:.4;letter-spacing:.1em;margin-bottom:14px"><i class="fas fa-wrench" style="margin-right:6px"></i>One-click Fix</h3>
+        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
+          <button onclick="runDbTool('pm_create_audit_logs','Audit logs table ready')" style="padding:12px 14px;border-radius:12px;background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.25);color:#d8b4fe;font-size:.62rem;font-weight:900;text-transform:uppercase;cursor:pointer;font-family:inherit"><i class="fas fa-clipboard-list" style="margin-right:6px"></i>Create audit_logs</button>
+          <button onclick="runDbTool('pm_create_site_config','Site config table ready')" style="padding:12px 14px;border-radius:12px;background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.25);color:#d8b4fe;font-size:.62rem;font-weight:900;text-transform:uppercase;cursor:pointer;font-family:inherit"><i class="fas fa-sliders-h" style="margin-right:6px"></i>Create site_config</button>
+          <button onclick="runDbTool('pm_fix_audit_columns','Audit columns fixed')" style="padding:12px 14px;border-radius:12px;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.25);color:#fbbf24;font-size:.62rem;font-weight:900;text-transform:uppercase;cursor:pointer;font-family:inherit"><i class="fas fa-tools" style="margin-right:6px"></i>Fix audit columns</button>
+          <button onclick="runDbTool('pm_seed_test_logs','Test logs added')" style="padding:12px 14px;border-radius:12px;background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.25);color:#6ee7b7;font-size:.62rem;font-weight:900;text-transform:uppercase;cursor:pointer;font-family:inherit"><i class="fas fa-seedling" style="margin-right:6px"></i>Seed test logs</button>
+          <button onclick="runDbTool('pm_fix_survey_workflow_columns','Survey workflow columns fixed')" style="padding:12px 14px;border-radius:12px;background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.25);color:#93c5fd;font-size:.62rem;font-weight:900;text-transform:uppercase;cursor:pointer;font-family:inherit"><i class="fas fa-poll-h" style="margin-right:6px"></i>Fix survey workflow</button>
+          <button onclick="runDbTool('pm_clear_system_logs','SYSTEM test logs cleared',true)" style="grid-column:1/-1;padding:12px 14px;border-radius:12px;background:rgba(220,38,38,.1);border:1px solid rgba(220,38,38,.25);color:#fca5a5;font-size:.62rem;font-weight:900;text-transform:uppercase;cursor:pointer;font-family:inherit"><i class="fas fa-trash" style="margin-right:6px"></i>Clear SYSTEM test logs</button>
+        </div>
+        <p style="font-size:.58rem;color:#64748b;margin-top:12px;font-weight:700">Requires the RPC setup from supabase-management-rpc.sql.</p>
+      </div>
+    </div>
+
     <div id="s-audit" style="display:none">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px">
         <h2 style="font-size:1.8rem;font-weight:900;text-transform:uppercase;background:linear-gradient(45deg,#fff,#a855f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent">Audit Logs</h2>
-        <div style="display:flex;gap:8px">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
           <select id="audit-filter" class="asf" style="margin-bottom:0;width:auto;padding:9px 14px" onchange="loadAudit()">
             <option value="">All Actions</option>
             <option value="login">Login</option>
+            <option value="register">Register</option>
             <option value="role_change">Role Change</option>
             <option value="ban">Ban / Unban</option>
             <option value="survey">Survey</option>
             <option value="invite">Invite Code</option>
             <option value="site">Site Config</option>
           </select>
+          <select id="audit-admin-filter" class="asf" style="margin-bottom:0;width:auto;min-width:150px;padding:9px 14px" onchange="loadAudit()">
+            <option value="">All Admins</option>
+          </select>
+          <input type="date" id="audit-from-filter" class="asf" style="margin-bottom:0;width:auto;padding:9px 14px" onchange="loadAudit()">
+          <input type="date" id="audit-to-filter" class="asf" style="margin-bottom:0;width:auto;padding:9px 14px" onchange="loadAudit()">
+          <button onclick="resetAuditFilters()" style="padding:9px 14px;border-radius:12px;background:rgba(255,255,255,.04);border:1px solid rgba(168,85,247,.18);color:#94a3b8;font-size:.6rem;font-weight:900;text-transform:uppercase;cursor:pointer;font-family:inherit"><i class="fas fa-times"></i></button>
           <button onclick="loadAudit()" style="padding:9px 16px;border-radius:12px;background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.25);color:#d8b4fe;font-size:.6rem;font-weight:900;text-transform:uppercase;cursor:pointer;font-family:inherit"><i class="fas fa-sync-alt"></i></button>
         </div>
       </div>
