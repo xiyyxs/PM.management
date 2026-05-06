@@ -221,7 +221,7 @@ function signOut() {
 }
 
 function goTo(sec) {
-  ['dashboard', 'surveys', 'detail', 'users', 'sites', 'audit'].forEach(s => {
+  ['dashboard', 'surveys', 'detail', 'users', 'sites', 'dbtools', 'audit'].forEach(s => {
     const el = $('s-' + s), tb = $('t-' + s);
     if (s === sec) { if (el) el.style.display = 'block'; if (tb) tb.classList.add('active') }
     else           { if (el) el.style.display = 'none';  if (tb) tb.classList.remove('active') }
@@ -230,6 +230,7 @@ function goTo(sec) {
   else if (sec === 'surveys') loadSurveys();
   else if (sec === 'users')   loadUsers();
   else if (sec === 'sites')   loadSites();
+  else if (sec === 'dbtools') loadDbTools();
   else if (sec === 'audit')   loadAudit();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
