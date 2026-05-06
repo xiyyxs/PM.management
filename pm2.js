@@ -1,4 +1,41 @@
 // ── Dashboard ──────────────────────────────────────────────────────────────
+const SURVEY_STATUS_META = {
+  new:        { label: 'New',        color: '#4ade80' },
+  in_review:  { label: 'In Review',  color: '#fbbf24' },
+  reviewed:   { label: 'Reviewed',   color: '#fbbf24' },
+  needs_info: { label: 'Needs Info', color: '#60a5fa' },
+  approved:   { label: 'Approved',   color: '#34d399' },
+  rejected:   { label: 'Rejected',   color: '#f87171' },
+  promoted:   { label: 'Promoted',   color: '#a855f7' }
+};
+const SURVEY_STATUSES = ['new', 'in_review', 'needs_info', 'approved', 'rejected', 'reviewed', 'promoted'];
+const DECISION_TAGS = ['', 'strong', 'maybe', 'weak', 'spam'];
+const NOTE_TEMPLATES = {
+  good: 'Good candidate. Clear answers and seems ready for the next step.',
+  portfolio: 'Need more portfolio or examples before deciding.',
+  no_contact: 'No usable contact info. Ask for email/username.',
+  low_effort: 'Rejected: low effort application.',
+  promoted: 'Promoted to developer after review.'
+};
+let DETAIL_SURVEY_ID = null, DETAIL_STATUS = '', DETAIL_SCORE = '', DETAIL_QUERY = '';
+
+function statusLabel(status) { return SURVEY_STATUS_META[status]?.label || status || 'New' }
+function statusColor(status) { return SURVEY_STATUS_META[status]?.color || '#9ca3af' }
+function statusOptions(selected) {
+  return SURVEY_STATUSES.map(s => '<option value="' + s + '"' + ((selected || 'new') === s ? ' selected' : '') + '>' + statusLabel(s) + '</option>').join('');
+}
+function scoreOptions(selected) {
+  const v = selected == null ? '' : String(selected);
+  let h = '<option value="">Score</option>';
+  for (let i = 5; i >= 1; i--) h += '<option value="' + i + '"' + (v === String(i) ? ' selected' : '') + '>' + i + '/5</option>';
+  return h;
+}
+function tagOptions(selected) {
+  return DECISION_TAGS.map(t => '<option value="' + t + '"' + ((selected || '') === t ? ' selected' : '') + '>' + (t ? t.charAt(0).toUpperCase() + t.slice(1) : 'Tag') + '</option>').join('');
+}
+function answerText(r) { return Object.values(r.answers || {}).join(' ').toLowerCase() }
+function contactKey(r) { return String(r.respondent_contact || r.respondent_name || '').trim().toLowerCase() }
+
 async function loadDashboard() {
   const [{ count: sc }, { count: rc }, { count: uc }] = await Promise.all([
     SB.from('surveys').select('*', { count: 'exact', head: true }),
@@ -14,19 +51,29 @@ async function loadDashboard() {
     .select('*', { count: 'exact', head: true }).gte('created_at', today.toISOString());
   $('d-nw').textContent = nc || 0;
 
+  const [{ count: qn }, { count: qr }, { count: qi }, { count: qa }] = await Promise.all([
+    SB.from('survey_responses').select('*', { count: 'exact', head: true }).eq('status', 'new'),
+    SB.from('survey_responses').select('*', { count: 'exact', head: true }).eq('status', 'in_review'),
+    SB.from('survey_responses').select('*', { count: 'exact', head: true }).eq('status', 'needs_info'),
+    SB.from('survey_responses').select('*', { count: 'exact', head: true }).in('status', ['approved', 'promoted'])
+  ]);
+  if ($('d-q-new')) $('d-q-new').textContent = qn || 0;
+  if ($('d-q-review')) $('d-q-review').textContent = qr || 0;
+  if ($('d-q-info')) $('d-q-info').textContent = qi || 0;
+  if ($('d-q-approved')) $('d-q-approved').textContent = qa || 0;
+
   const { data: rs } = await SB.from('survey_responses')
     .select('*,surveys(title)').order('created_at', { ascending: false }).limit(6);
   const el = $('d-recent'); el.innerHTML = '';
   if (!rs?.length) { el.innerHTML = '<p style="color:#64748b;font-style:italic;font-size:.85rem">No responses yet.</p>'; return }
 
-  const statusColors = { new: '#4ade80', reviewed: '#fbbf24', promoted: '#a855f7' };
   rs.forEach(r => {
     const d = document.createElement('div'); d.className = 'rrow';
     const nm = r.respondent_name || 'Anonymous';
     d.innerHTML = '<div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#7c3aed,#4f46e5);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:.8rem;flex-shrink:0">' + esc(nm.charAt(0).toUpperCase()) + '</div>'
       + '<div style="flex:1;min-width:0"><div style="font-size:.75rem;font-weight:900;text-transform:uppercase;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(nm) + '</div>'
       + '<div style="font-size:.58rem;color:#64748b;margin-top:2px">' + esc(r.surveys?.title || '') + '</div></div>'
-      + '<span style="font-size:.5rem;font-weight:900;text-transform:uppercase;color:' + (statusColors[r.status] || '#4ade80') + '">' + esc(r.status || 'new') + '</span>';
+      + '<span style="font-size:.5rem;font-weight:900;text-transform:uppercase;color:' + statusColor(r.status || 'new') + '">' + esc(statusLabel(r.status || 'new')) + '</span>';
     el.appendChild(d);
   });
 }
@@ -200,6 +247,123 @@ async function loadUsers() {
   const { data } = await SB.from('users').select('*').order('created_at', { ascending: false });
   USERS = data || []; renderUsers();
   loadInviteCodes();
+}
+
+async function openDetail(id) {
+  goTo('detail');
+  DETAIL_SURVEY_ID = id;
+  const { data: sv } = await SB.from('surveys').select('*').eq('id', id).single();
+  if (!sv) { toast('Not found', 'error'); return }
+
+  const [{ data: rs }, { data: users }, { data: hist }] = await Promise.all([
+    SB.from('survey_responses').select('*').eq('survey_id', id).order('created_at', { ascending: false }),
+    SB.from('users').select('id,username,email,role,banned,created_at').limit(500),
+    SB.from('survey_responses').select('id,respondent_name,respondent_contact,status,created_at,surveys(title)').order('created_at', { ascending: false }).limit(500)
+  ]);
+  RESPS = rs || [];
+
+  const lnk = location.origin + location.pathname + '?survey=' + sv.public_id;
+  const q = (DETAIL_QUERY || '').toLowerCase();
+  const filtered = RESPS.filter(r => {
+    const score = r.score == null ? '' : String(r.score);
+    if (DETAIL_STATUS && (r.status || 'new') !== DETAIL_STATUS) return false;
+    if (DETAIL_SCORE && score !== DETAIL_SCORE) return false;
+    if (q && !(String(r.respondent_name || '').toLowerCase().includes(q) || String(r.respondent_contact || '').toLowerCase().includes(q) || answerText(r).includes(q))) return false;
+    return true;
+  });
+
+  let h = '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px">'
+    + '<h2 style="font-size:1.3rem;font-weight:900;text-transform:uppercase;background:linear-gradient(45deg,#fff,#a855f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent">' + esc(sv.title) + '</h2>'
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
+    + '<button onclick="navigator.clipboard.writeText(\'' + lnk + '\');toast(\'Copied!\',\'success\',1500)" style="padding:7px 14px;border-radius:10px;background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.25);color:#d8b4fe;font-size:.65rem;font-weight:900;text-transform:uppercase;cursor:pointer;font-family:inherit"><i class="fas fa-link mr-1"></i>Copy Link</button>'
+    + '<button onclick="tglSV(\'' + sv.id + '\',' + (!sv.is_active) + ')" style="padding:7px 14px;border-radius:10px;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.25);color:#fbbf24;font-size:.65rem;font-weight:900;text-transform:uppercase;cursor:pointer;font-family:inherit">' + (sv.is_active ? '<i class="fas fa-pause mr-1"></i>Close' : '<i class="fas fa-play mr-1"></i>Open') + '</button>'
+    + '<button onclick="if(confirm(\'Delete survey?\'))delSV(\'' + sv.id + '\')" style="padding:7px 14px;border-radius:10px;background:rgba(220,38,38,.1);border:1px solid rgba(220,38,38,.25);color:#fca5a5;font-size:.65rem;font-weight:900;text-transform:uppercase;cursor:pointer;font-family:inherit"><i class="fas fa-trash mr-1"></i>Delete</button>'
+    + '</div></div>';
+
+  if (sv.description) h += '<p style="font-size:.7rem;color:#64748b;margin-bottom:20px">' + esc(sv.description || 'No description') + '</p>';
+  h += '<div class="glass" style="padding:14px;border-radius:14px;margin-bottom:16px">'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr 2fr;gap:10px">'
+    + '<select class="asf" style="margin-bottom:0" onchange="setDetailFilter(\'status\',this.value)">'
+    + '<option value="">All Statuses</option>' + SURVEY_STATUSES.map(s => '<option value="' + s + '"' + (DETAIL_STATUS === s ? ' selected' : '') + '>' + statusLabel(s) + '</option>').join('') + '</select>'
+    + '<select class="asf" style="margin-bottom:0" onchange="setDetailFilter(\'score\',this.value)">'
+    + '<option value="">All Scores</option>' + [5,4,3,2,1].map(s => '<option value="' + s + '"' + (DETAIL_SCORE === String(s) ? ' selected' : '') + '>' + s + '/5</option>').join('') + '</select>'
+    + '<input class="asf" style="margin-bottom:0" value="' + esc(DETAIL_QUERY) + '" placeholder="Search name, contact, answers..." oninput="setDetailFilter(\'query\',this.value)">'
+    + '</div></div>'
+    + '<h3 style="font-size:.75rem;font-weight:900;text-transform:uppercase;opacity:.4;margin-bottom:12px">Responses (' + filtered.length + ' / ' + RESPS.length + ')</h3>';
+
+  if (!filtered.length) h += '<p style="color:#64748b;font-style:italic;font-size:.85rem">No responses found.</p>';
+  else h += '<div class="space-y-3">' + filtered.map(r => renderResponseCard(r, sv, users || [], hist || [])).join('') + '</div>';
+  $('det-content').innerHTML = h;
+}
+
+function renderResponseCard(r, sv, users, hist) {
+  const nm = r.respondent_name || 'Anonymous';
+  const tm = new Date(r.created_at).toLocaleString();
+  const ans = r.answers || {};
+  const key = contactKey(r);
+  const cand = users.find(u => {
+    const email = (u.email || '').toLowerCase(), name = (u.username || '').toLowerCase();
+    return key && ((email && (email.includes(key) || key.includes(email))) || (name && (name.includes(key) || key.includes(name))));
+  });
+  const history = hist.filter(x => contactKey(x) && contactKey(x) === key);
+  const historyText = key ? history.length + ' application' + (history.length === 1 ? '' : 's') : 'No contact key';
+  const candidateCard = cand
+    ? '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:12px 0;padding:12px;background:rgba(255,255,255,.025);border:1px solid rgba(168,85,247,.08);border-radius:12px"><div><div style="font-size:.48rem;opacity:.4;text-transform:uppercase;font-weight:900">User</div><div style="font-size:.65rem;font-weight:900">' + esc(cand.username || 'Unknown') + '</div></div><div><div style="font-size:.48rem;opacity:.4;text-transform:uppercase;font-weight:900">Role</div><div style="font-size:.65rem;color:#d8b4fe;font-weight:900">' + esc(cand.role || 'member') + '</div></div><div><div style="font-size:.48rem;opacity:.4;text-transform:uppercase;font-weight:900">Status</div><div style="font-size:.65rem;color:' + (cand.banned ? '#f87171' : '#4ade80') + ';font-weight:900">' + (cand.banned ? 'Banned' : 'Active') + '</div></div><div><div style="font-size:.48rem;opacity:.4;text-transform:uppercase;font-weight:900">History</div><div style="font-size:.65rem;font-weight:900">' + esc(historyText) + '</div></div></div>'
+    : '<div style="font-size:.58rem;color:#64748b;margin:12px 0;padding:10px 12px;background:rgba(255,255,255,.025);border:1px solid rgba(168,85,247,.08);border-radius:10px">No matching PM.tools user found. History: ' + esc(historyText) + '</div>';
+
+  return '<div class="glass" style="padding:18px;border-radius:14px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">'
+    + '<div><span style="font-size:.8rem;font-weight:900;text-transform:uppercase">' + esc(nm) + '</span>' + (r.respondent_contact ? '<span style="font-size:.6rem;color:#64748b;margin-left:8px">' + esc(r.respondent_contact) + '</span>' : '') + '<div style="font-size:.55rem;color:#64748b;margin-top:3px">' + tm + '</div></div>'
+    + '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><select onchange="setResponseField(\'' + r.id + '\',\'' + sv.id + '\',\'status\',this.value)" style="background:rgba(255,255,255,.05);border:1px solid rgba(168,85,247,.2);color:' + statusColor(r.status || 'new') + ';padding:6px 10px;border-radius:10px;font-size:.58rem;font-weight:900;text-transform:uppercase;font-family:inherit">' + statusOptions(r.status || 'new') + '</select><select onchange="setResponseField(\'' + r.id + '\',\'' + sv.id + '\',\'score\',this.value)" style="background:rgba(255,255,255,.05);border:1px solid rgba(168,85,247,.2);color:#fbbf24;padding:6px 10px;border-radius:10px;font-size:.58rem;font-weight:900;text-transform:uppercase;font-family:inherit">' + scoreOptions(r.score) + '</select><select onchange="setResponseField(\'' + r.id + '\',\'' + sv.id + '\',\'decision_tag\',this.value)" style="background:rgba(255,255,255,.05);border:1px solid rgba(168,85,247,.2);color:#d8b4fe;padding:6px 10px;border-radius:10px;font-size:.58rem;font-weight:900;text-transform:uppercase;font-family:inherit">' + tagOptions(r.decision_tag) + '</select></div></div>'
+    + candidateCard
+    + '<div style="display:grid;gap:5px">' + (sv.fields || []).map(f => '<div style="font-size:.65rem"><span style="font-weight:900;text-transform:uppercase;opacity:.4">' + esc(f.label) + ': </span><span style="color:#d8b4fe">' + esc(typeof ans[f.id] === 'boolean' ? (ans[f.id] ? 'Yes' : 'No') : (ans[f.id] || '---')) + '</span></div>').join('') + '</div>'
+    + '<div style="margin-top:14px;display:grid;gap:8px"><textarea id="note-' + r.id + '" class="auth-input" style="height:74px;padding:12px 14px;font-size:.65rem" placeholder="Admin note...">' + esc(r.admin_note || '') + '</textarea><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
+    + '<select onchange="applyNoteTemplate(\'' + r.id + '\',this.value);this.value=\'\'" style="background:rgba(255,255,255,.05);border:1px solid rgba(168,85,247,.2);color:#d8b4fe;padding:7px 10px;border-radius:10px;font-size:.58rem;font-weight:900;text-transform:uppercase;font-family:inherit"><option value="">Template</option><option value="good">Good Candidate</option><option value="portfolio">Need Portfolio</option><option value="no_contact">No Contact</option><option value="low_effort">Low Effort</option><option value="promoted">Promoted</option></select><button onclick="saveResponseNote(\'' + r.id + '\',\'' + sv.id + '\')" style="padding:7px 12px;border-radius:10px;background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.25);color:#d8b4fe;font-size:.58rem;font-weight:900;text-transform:uppercase;font-family:inherit"><i class="fas fa-save"></i> Note</button><button onclick="setResponseStatus(\'' + r.id + '\',\'' + sv.id + '\',\'approved\')" style="padding:7px 12px;border-radius:10px;background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.25);color:#6ee7b7;font-size:.58rem;font-weight:900;text-transform:uppercase;font-family:inherit"><i class="fas fa-check"></i> Approve</button><button onclick="setResponseStatus(\'' + r.id + '\',\'' + sv.id + '\',\'rejected\')" style="padding:7px 12px;border-radius:10px;background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.25);color:#fca5a5;font-size:.58rem;font-weight:900;text-transform:uppercase;font-family:inherit"><i class="fas fa-times"></i> Reject</button><button onclick="setResponseStatus(\'' + r.id + '\',\'' + sv.id + '\',\'needs_info\')" style="padding:7px 12px;border-radius:10px;background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.25);color:#93c5fd;font-size:.58rem;font-weight:900;text-transform:uppercase;font-family:inherit"><i class="fas fa-question"></i> Info</button><button onclick="promR(\'' + r.id + '\',\'' + sv.id + '\')" style="padding:7px 12px;border-radius:10px;background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.25);color:#c084fc;font-size:.58rem;font-weight:900;text-transform:uppercase;font-family:inherit"><i class="fas fa-arrow-up"></i> Dev</button></div></div></div>';
+}
+
+function setDetailFilter(type, value) {
+  if (type === 'status') DETAIL_STATUS = value;
+  if (type === 'score') DETAIL_SCORE = value;
+  if (type === 'query') DETAIL_QUERY = value;
+  if (DETAIL_SURVEY_ID) openDetail(DETAIL_SURVEY_ID);
+}
+
+async function setResponseField(rid, sid, field, value) {
+  const patch = {};
+  patch[field] = field === 'score' ? (value ? Number(value) : null) : value;
+  if (field === 'status') { patch.reviewed_by = ADMIN?.id || null; patch.reviewed_at = new Date().toISOString(); }
+  const { error } = await SB.from('survey_responses').update(patch).eq('id', rid);
+  if (error) { toast('Error: ' + error.message, 'error'); return }
+  toast('Response updated', 'success', 1400);
+  openDetail(sid);
+}
+
+function setResponseStatus(rid, sid, status) { setResponseField(rid, sid, 'status', status) }
+function applyNoteTemplate(rid, key) {
+  const el = $('note-' + rid);
+  if (!el || !NOTE_TEMPLATES[key]) return;
+  el.value = (el.value ? el.value + '\n' : '') + NOTE_TEMPLATES[key];
+}
+async function saveResponseNote(rid, sid) {
+  const note = $('note-' + rid)?.value || '';
+  const { error } = await SB.from('survey_responses').update({ admin_note: note, reviewed_by: ADMIN?.id || null, reviewed_at: new Date().toISOString() }).eq('id', rid);
+  if (error) { toast('Error: ' + error.message, 'error'); return }
+  toast('Note saved', 'success', 1400);
+  openDetail(sid);
+}
+async function markR(rid, sid) { await setResponseField(rid, sid, 'status', 'reviewed') }
+async function promR(rid, sid) {
+  const r = RESPS.find(x => x.id === rid); if (!r) return;
+  const ct = r.respondent_contact || r.respondent_name || '';
+  if (!ct) { toast('No contact info to find user', 'warning'); return }
+  const { data: u } = await SB.from('users').select('*').or('email.ilike.%' + ct + '%,username.ilike.%' + ct + '%').single();
+  if (!u) { toast('User not found in PM.tools. Contact: ' + ct, 'warning', 5000); return }
+  if (u.role === 'developer' || u.role === 'admin') { toast(u.username + ' is already ' + u.role, 'info'); return }
+  if (!confirm('Promote ' + u.username + ' to Developer on PM.tools?')) return;
+  const { error } = await SB.from('users').update({ role: 'developer' }).eq('id', u.id);
+  if (error) { toast('Error: ' + error.message, 'error'); return }
+  await SB.from('survey_responses').update({ status: 'promoted', decision_tag: 'strong', reviewed_by: ADMIN?.id || null, reviewed_at: new Date().toISOString() }).eq('id', rid);
+  logAudit('role_change', 'Promoted ' + u.username + ' to developer via survey');
+  toast(u.username + ' -> Developer!', 'success', 4000); openDetail(sid);
 }
 
 function renderUsers() {
